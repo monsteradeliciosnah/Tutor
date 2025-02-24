@@ -1,0 +1,129 @@
+import openai
+import json
+import os
+import streamlit as st
+import matplotlib.pyplot as plt
+from wordcloud import WordCloud
+import pyttsx3
+import speech_recognition as sr
+import random
+import pandas as pd
+
+class AITeachingAssistant:
+    def __init__(self, api_key):
+        self.api_key = api_key
+        openai.api_key = self.api_key
+        self.tts_engine = pyttsx3.init()
+        self.recognizer = sr.Recognizer()
+        self.user_progress = {}
+        self.leaderboard = pd.DataFrame(columns=["User ID", "Score"])
+        self.study_groups = {}
+        self.discussion_forums = {}
+    
+    def generate_lesson_plan(self, topic, level="beginner"):
+        prompt = f"Create a detailed lesson plan on {topic} for a {level} level student. Include key concepts, examples, and exercises."
+        response = openai.ChatCompletion.create(
+            model="gpt-4",
+            messages=[{"role": "system", "content": "You are an AI teaching assistant."},
+                      {"role": "user", "content": prompt}]
+        )
+        return response["choices"][0]["message"]["content"]
+    
+    def quiz_generator(self, topic, num_questions=5):
+        prompt = f"Generate {num_questions} multiple-choice questions on {topic} with correct answers."
+        response = openai.ChatCompletion.create(
+            model="gpt-4",
+            messages=[{"role": "system", "content": "You are an AI teaching assistant."},
+                      {"role": "user", "content": prompt}]
+        )
+        return response["choices"][0]["message"]["content"]
+    
+    def interactive_explanation(self, question):
+        prompt = f"Explain the following concept interactively: {question}"
+        response = openai.ChatCompletion.create(
+            model="gpt-4",
+            messages=[{"role": "system", "content": "You are an AI teaching assistant."},
+                      {"role": "user", "content": prompt}]
+        )
+        return response["choices"][0]["message"]["content"]
+    
+    def generate_wordcloud(self, text):
+        wordcloud = WordCloud(width=800, height=400, background_color='white').generate(text)
+        plt.figure(figsize=(10, 5))
+        plt.imshow(wordcloud, interpolation='bilinear')
+        plt.axis("off")
+        plt.show()
+    
+    def text_to_speech(self, text):
+        self.tts_engine.say(text)
+        self.tts_engine.runAndWait()
+    
+    def speech_to_text(self):
+        with sr.Microphone() as source:
+            st.info("Listening for user input...")
+            audio = self.recognizer.listen(source)
+        try:
+            text = self.recognizer.recognize_google(audio)
+            st.success(f"Recognized speech: {text}")
+            return text
+        except sr.UnknownValueError:
+            st.error("Could not understand audio")
+            return ""
+        except sr.RequestError:
+            st.error("Could not request results")
+            return ""
+    
+    def create_discussion_forum(self, forum_name):
+        if forum_name not in self.discussion_forums:
+            self.discussion_forums[forum_name] = []
+        return f"Discussion forum '{forum_name}' created successfully."
+    
+    def post_in_forum(self, forum_name, user_id, message):
+        if forum_name in self.discussion_forums:
+            self.discussion_forums[forum_name].append({"user": user_id, "message": message})
+            return f"Message posted in '{forum_name}'."
+        return "Forum not found."
+    
+    def view_forum(self, forum_name):
+        return self.discussion_forums.get(forum_name, "Forum not found.")
+    
+    def create_study_group(self, group_name, user_id):
+        if group_name not in self.study_groups:
+            self.study_groups[group_name] = []
+        self.study_groups[group_name].append(user_id)
+        return f"{user_id} has joined the study group '{group_name}'."
+    
+    def get_study_groups(self):
+        return self.study_groups
+    
+if __name__ == "__main__":
+    api_key = os.getenv("OPENAI_API_KEY")
+    assistant = AITeachingAssistant(api_key)
+    
+    st.title("AI Teaching Assistant")
+    user_id = st.text_input("Enter your User ID:")
+    
+    if st.button("View Leaderboard"):
+        st.dataframe(assistant.leaderboard)
+    
+    study_group = st.text_input("Enter a study group name:")
+    if st.button("Join Study Group"):
+        message = assistant.create_study_group(study_group, user_id)
+        st.success(message)
+    
+    if st.button("View Study Groups"):
+        st.json(assistant.get_study_groups())
+    
+    forum_name = st.text_input("Enter a discussion forum name:")
+    if st.button("Create Forum"):
+        message = assistant.create_discussion_forum(forum_name)
+        st.success(message)
+    
+    post_message = st.text_input("Enter a message to post in forum:")
+    if st.button("Post in Forum"):
+        message = assistant.post_in_forum(forum_name, user_id, post_message)
+        st.success(message)
+    
+    if st.button("View Forum Messages"):
+        forum_content = assistant.view_forum(forum_name)
+        st.json(forum_content)
